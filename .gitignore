@@ -218,3 +218,6 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Generated synthetic data (recreate with: python -m stockout.data_gen)
+data/synthetic/
