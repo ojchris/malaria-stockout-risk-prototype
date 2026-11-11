@@ -51,6 +51,35 @@ The generator uses seed 42 by default, so everyone gets identical data. See `src
 
 ![Synthetic data overview](docs/figures/synthetic_overview.png)
 
+## Changes
+
+What was done at each phase, in order. Dates are real commit dates; nothing is backdated.
+
+### Phase 0: Setup (10 November 2026)
+
+- Created the public repo with an MIT license and a Python `.gitignore`.
+- Wrote the README, stating up front that the project was built in response to a job posting, that the data is synthetic and that AI tools were used.
+- Added `requirements.txt`, the `src/stockout/` package and a smoke test.
+
+### Terminology glossary (11 November 2026)
+
+- Added a glossary to the README, grouped by phase, so each new term is explained where it first matters.
+
+### Phase 1: Synthetic data generator (11 November 2026)
+
+- Added `src/stockout/data_gen.py`, a seeded generator that simulates weekly stock for two malaria commodities (artemether-lumefantrine and rapid diagnostic tests) across 45 facilities for 3 years (14,040 facility-commodity-week rows).
+- Simulated seasonal demand that peaks 4 weeks after a rain index, scaled by facility catchment population, with noise.
+- Simulated ordering from recent demand, random delivery delays (more often rural), partial fills, batch expiry with first-expired-first-out dispensing, write-offs, and occasional oversized short-dated push shipments.
+- Added 16 tests (17 with the smoke test) covering reproducibility, stock conservation, seasonality, and stockout and expiry sanity checks.
+- Added `scripts/plot_overview.py` and the overview figure.
+- Result on the default seed (42): stockouts in about 12% of facility-weeks, peaking at about 53% of facilities in the wet-season ramp-up, higher in rural than urban facilities. About 0.4% of delivered stock expires.
+- Finding: the first version had 37% stockout weeks because facilities planned orders from consumption, which stockouts hide, so each stockout made the next more likely. Planning from demand (including patients turned away) fixed it. A hidden-demand problem like this is called censored data (see the glossary).
+- Known gap: no test checks the random delivery delays directly.
+
+### Phase 2 onward
+
+Not started. See the planned scope above.
+
 ## Terminology
 
 A glossary grouped by the phase where each term first matters. It grows as the project does; phases 6-10 are planned, so their terms are previews.
