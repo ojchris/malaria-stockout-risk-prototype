@@ -14,7 +14,7 @@ A small decision-support prototype that estimates which health facilities are li
 
 | Stage | What | Status |
 |---|---|---|
-| v0.1 | Synthetic data generator, seasonal-naive baseline, gradient-boosting forecast with intervals, stockout-risk flag, Streamlit page, model card | In progress: data generator and tests done |
+| v0.1 | Synthetic data generator, seasonal-naive baseline, gradient-boosting forecast with intervals, stockout-risk flag, Streamlit page, model card | In progress: data generator, forecast and evaluation done |
 | Next | Real open data for facility locations and malaria seasonality (GRID3, Malaria Atlas Project, rainfall) | Planned |
 | Next | Expiry-aware redistribution suggestions | Planned |
 | Next | LLM explanation layer over public guideline documents, with a small evaluation set | Planned |
@@ -28,7 +28,7 @@ tests/          Unit tests
 scripts/        Helper scripts, such as the overview plot
 data/           Generated data (not committed; recreate with one command)
 app/            Streamlit interface (added later)
-docs/           Model card, figures and notes
+docs/           Model card, figures, results tables and notes
 ```
 
 ## Run it
@@ -45,6 +45,7 @@ Generate the synthetic data (writes `facilities.csv` and `weekly_stock.csv` to `
 ```bash
 PYTHONPATH=src python -m stockout.data_gen --out data/synthetic
 python scripts/plot_overview.py
+python scripts/run_forecast_eval.py   # regenerates the data itself, then scores the forecasts
 ```
 
 The generator uses seed 42 by default, so everyone gets identical data. See `src/stockout/data_gen.py` for what is simulated and `docs/figures/synthetic_overview.png` for the result.
@@ -76,7 +77,35 @@ What was done at each phase, in order. Dates are real commit dates; nothing is b
 - Finding: the first version had 37% stockout weeks because facilities planned orders from consumption, which stockouts hide, so each stockout made the next more likely. Planning from demand (including patients turned away) fixed it. A hidden-demand problem like this is called censored data (see the glossary).
 - Known gap: no test checks the random delivery delays directly.
 
-### Phase 2 onward
+### Phase 2: Forecasting and evaluation (11 November 2026)
+
+- Added `src/stockout/forecast.py`, which forecasts demand 4 weeks ahead (about one delivery lead time) for each facility and commodity.
+- Features use only data up to the forecast date. Demand is modelled per 1,000 people so large and small facilities share one model.
+- Compared two baselines (same week last year; average of the last 4 weeks) with LightGBM. Two extra LightGBM models estimate the 10th and 90th percentiles to give an 80% prediction interval.
+- Split by date: trained on target weeks 20 March 2023 to 23 December 2024 (8,370 rows) and tested on 30 December 2024 to 22 December 2025 (4,680 rows). Every method is scored on the same test rows.
+- Added 14 tests (31 in total), including a leakage test: cutting the data off at a date must not change any feature on or before it. I confirmed the test fails when a future-looking feature is planted.
+- Added `scripts/run_forecast_eval.py`, the metrics tables in `docs/results/` and `docs/figures/forecast_eval.png`.
+
+| Method | MAE | RMSE | MAE as % of mean demand |
+|---|---|---|---|
+| Moving average (last 4 weeks) | 8.12 | 12.47 | 33.8% |
+| Seasonal naive (same week last year) | 6.64 | 10.15 | 27.7% |
+| LightGBM without rain index | 4.78 | 7.25 | 19.9% |
+| LightGBM with rain index | 4.79 | 7.27 | 20.0% |
+
+Error is in courses or tests per facility-week; lower is better.
+
+![Forecast evaluation](docs/figures/forecast_eval.png)
+
+- Finding: LightGBM beats both baselines, with about 28% lower error than seasonal naive. The moving average is worst because it lags behind the rising season.
+- Finding: the rain index adds nothing (MAE 4.79 vs 4.78). Calendar features already capture the seasonal cycle in this synthetic data.
+- Finding: the 80% intervals hold 76% of actual values (77% for AL, 74% for RDT). They are slightly overconfident.
+- Finding: the leakage test caught a design flaw while I was building it. The target week's calendar position was read from future rows of the table. It was not a demand leak, but it depended on future rows, so I replaced it with plain date arithmetic.
+- Caveat: the synthetic seasonal pattern repeats identically every year. That flatters the seasonal-naive baseline and the calendar features. Real data would vary from year to year.
+- Caveat: weekly demand contains random noise, so some error cannot be removed by any model.
+- Known gaps: no hyperparameter tuning, no recalibration of the intervals, a single split rather than a rolling backtest, and still no test for the random delivery delays.
+
+### Phase 3 onward
 
 Not started. See the planned scope above.
 
@@ -139,6 +168,12 @@ A glossary grouped by the phase where each term first matters. It grows as the p
 10. **Coverage:** How often the true value actually falls inside the prediction interval. If an 80% interval covers only 60%, it is overconfident.
 11. **MAE / RMSE:** Two ways to measure forecast error. MAE is the average miss; RMSE punishes large misses more.
 12. **Overfitting:** A model memorising its training data and then doing badly on new data.
+13. **Forecast horizon:** How far ahead you predict. Here it is 4 weeks, roughly the time between ordering and delivery, so the forecast is available when an ordering decision is made.
+14. **Rate per 1,000 people:** Demand divided by catchment population in thousands. It lets one model learn from large and small facilities alike.
+15. **Quantile regression:** Training a model to predict a chosen percentile, such as the 10th or 90th, instead of the average. Two of them together form the prediction interval.
+16. **Leak-free features:** Inputs built only from data available at the forecast date. The leakage test checks this by cutting the data off at a date and confirming no feature changes.
+17. **Ablation:** Removing one ingredient to see what it contributes. Here, the model is fitted with and without the rain index.
+18. **Irreducible error:** Error that no model can remove because the outcome is partly random, such as the random number of patients in a week.
 
 ### Phase 3: Stockout-risk flag
 

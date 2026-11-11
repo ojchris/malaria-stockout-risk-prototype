@@ -1,0 +1,7 @@
+method,scope,target_coverage,actual_coverage,mean_interval_width
+LightGBM without rain index,all,0.8,0.7628205128205128,14.060366739717873
+LightGBM without rain index,AL,0.8,0.7816239316239316,12.406622836459665
+LightGBM without rain index,RDT,0.8,0.744017094017094,15.714110642976081
+LightGBM with rain index,all,0.8,0.7561965811965812,13.850209252330549
+LightGBM with rain index,AL,0.8,0.773931623931624,12.197598185117625
+LightGBM with rain index,RDT,0.8,0.7384615384615385,15.50282031954347
