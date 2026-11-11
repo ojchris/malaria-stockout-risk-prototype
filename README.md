@@ -14,7 +14,7 @@ A small decision-support prototype that estimates which health facilities are li
 
 | Stage | What | Status |
 |---|---|---|
-| v0.1 | Synthetic data generator, seasonal-naive baseline, gradient-boosting forecast with intervals, stockout-risk flag, Streamlit page, model card | Not started |
+| v0.1 | Synthetic data generator, seasonal-naive baseline, gradient-boosting forecast with intervals, stockout-risk flag, Streamlit page, model card | In progress: data generator and tests done |
 | Next | Real open data for facility locations and malaria seasonality (GRID3, Malaria Atlas Project, rainfall) | Planned |
 | Next | Expiry-aware redistribution suggestions | Planned |
 | Next | LLM explanation layer over public guideline documents, with a small evaluation set | Planned |
@@ -25,8 +25,10 @@ A small decision-support prototype that estimates which health facilities are li
 ```
 src/stockout/   Python package: data generation, models, risk flags
 tests/          Unit tests
+scripts/        Helper scripts, such as the overview plot
+data/           Generated data (not committed; recreate with one command)
 app/            Streamlit interface (added later)
-docs/           Model card and notes (added later)
+docs/           Model card, figures and notes
 ```
 
 ## Run it
@@ -37,6 +39,17 @@ source .venv/bin/activate
 pip install -r requirements.txt
 python -m pytest -q
 ```
+
+Generate the synthetic data (writes `facilities.csv` and `weekly_stock.csv` to `data/synthetic/`) and draw the overview figure:
+
+```bash
+PYTHONPATH=src python -m stockout.data_gen --out data/synthetic
+python scripts/plot_overview.py
+```
+
+The generator uses seed 42 by default, so everyone gets identical data. See `src/stockout/data_gen.py` for what is simulated and `docs/figures/synthetic_overview.png` for the result.
+
+![Synthetic data overview](docs/figures/synthetic_overview.png)
 
 ## Terminology
 
@@ -72,6 +85,16 @@ A glossary grouped by the phase where each term first matters. It grows as the p
 13. **Expiry date / shelf life:** The date after which a batch can't be used, and how long a batch lasts from manufacture.
 14. **Catchment population:** The number of people a facility serves, which scales its demand.
 15. **Unit test:** A small automatic check that one piece of code does what it should.
+16. **Review period:** How often a facility checks its stock and decides whether to reorder, here every 4 weeks.
+17. **Fill rate:** The share of an order that actually arrives. A fill rate of 80% means a facility asked for 100 and got 80.
+18. **On order (pipeline stock):** Stock that has been ordered but has not arrived yet.
+19. **Write-off:** Removing expired stock from the records because it can no longer be used.
+20. **First-expired, first-out (FEFO):** Using the batches that expire soonest first. The generator does this when serving patients.
+21. **Push shipment:** Stock sent to a facility that it did not ask for, often oversized or short-dated. It creates the surplus that may expire.
+22. **Poisson distribution:** A standard way to generate random whole-number counts, such as how many patients arrive in a week.
+23. **Opening and closing stock:** Stock at the start and end of a week. The tests check that closing = opening + received - expired - consumed, so no stock appears or vanishes.
+24. **Censored data:** A measurement cut off by a limit. Consumption can never exceed stock, so a stockout hides true demand. Facilities that plan from consumption alone under-order, which causes a "stockout spiral"; the generator plans from demand, including patients turned away.
+25. **Rain index:** A number showing how rainy a week is compared with an average week (1.0). Here it is a smooth invented curve. Real rainfall data arrives in Phase 6.
 
 ### Phase 2: Forecasting and evaluation
 
@@ -134,7 +157,7 @@ A glossary grouped by the phase where each term first matters. It grows as the p
 1. **Redistribution:** Moving surplus stock from one facility to another that is short.
 2. **Surplus / shortfall:** Stock above, or below, what a facility is expected to need.
 3. **Expiry-aware matching:** Pairing surplus close to expiry with nearby shortfalls so it is used rather than wasted.
-4. **First-expired, first-out (FEFO):** Using the batches that expire soonest first.
+4. **First-expired, first-out (FEFO):** Using the batches that expire soonest first (already used in the Phase 1 generator).
 5. **Constraint:** A rule a solution must respect, for example staying within the same district.
 6. **Greedy algorithm:** A simple method that makes the best-looking choice at each step without reconsidering.
 7. **Optimisation:** Finding the best allocation under the constraints.
